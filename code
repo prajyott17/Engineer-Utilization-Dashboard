@@ -1,0 +1,736 @@
+import pandas as pd
+import streamlit as st
+from datetime import date
+import numpy as np
+import plotly.express as px
+
+# ================= CONFIG =================
+st.set_page_config(page_title="Engineer Utilization", layout="wide")
+
+# ================= UI =================
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+html, body, [class*="css"]  {
+    font-family: 'Inter', sans-serif;
+}
+
+header, #MainMenu, footer {visibility: hidden;}
+
+body { background-color: #f8fafc; }
+
+.block-container {
+
+    padding-top: 1rem;
+
+    padding-left: 1rem;
+
+    padding-right: 1rem;
+
+    max-width: 100% !important;
+
+    width: 100% !important;
+}
+section.main > div {
+
+    max-width: 100% !important;
+
+    padding-left: 1rem !important;
+
+    padding-right: 1rem !important;
+}
+
+.title { font-size: 24px; font-weight: 600; color: #1f2937; }
+.subtitle { font-size: 13px; color: #6b7280; margin-bottom: 20px; }
+
+.section {
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 25px;
+    color: #374151;
+}
+
+.card {
+
+    background: rgba(255,255,255,0.92);
+
+    backdrop-filter: blur(8px);
+
+    border:1px solid #dce3ea;
+
+    border-radius:18px;
+
+    height:90px;
+            
+    padding:12px;
+
+    border-radius:18px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:center;
+
+    align-items:center;
+
+    box-shadow:
+        0 4px 12px rgba(15,23,42,0.04);
+
+    transition:all 0.2s ease;
+}
+
+.card:hover{
+
+    transform:translateY(-2px);
+
+    box-shadow:
+        0 10px 24px rgba(15,23,42,0.08);
+}
+
+.card-title { font-size: 12px; color: #64748b; margin-bottom:8px; }
+.card-value {
+    font-size:20px;
+    font-weight:600;
+    color:#111827;
+    line-height:1;
+}
+
+/* Table borders */
+thead tr th {
+    background-color: #f1f5f9 !important;
+    border: 1px solid #d1d5db !important;
+    font-weight: 600 !important;
+}
+
+tbody tr td {
+    border: 1px solid #e5e7eb !important;
+}
+
+tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+.stApp {
+
+    background:
+
+        radial-gradient(
+            circle at 85% 5%,
+            rgba(215,25,32,0.03),
+            transparent 65%
+        ),
+
+        radial-gradient(
+            circle at 10% 90%,
+            rgba(37,99,235,0.025),
+            transparent 65%
+        ),
+
+        linear-gradient(
+            135deg,
+            #fafbfc,
+            #f7f9fc
+        );
+}
+.stApp::after {
+
+    content:"";
+
+    position:fixed;
+
+    top:0;
+
+    left:0;
+
+    width:100%;
+
+    height:6px;
+
+    background:#D71920;
+
+    z-index:9999;
+}
+
+[data-testid="column"] {
+    padding: 0 4px !important;
+}
+.util-card{
+
+    background:white !important;
+
+    border-top:4px solid #D71920;
+}
+.section-header{
+
+    font-size:21px;
+
+    font-weight:700;
+
+    color:#111827;
+
+    padding-bottom:6px;
+
+    border-bottom:2px solid rgba(215,25,32,0.15);
+
+    margin-bottom:15px;
+}
+
+div[data-baseweb="select"]{
+
+    border-radius:12px !important;
+}
+
+.stDateInput > div{
+
+    border-radius:12px !important;
+}
+div[data-testid="stPlotlyChart"]{
+
+    background:rgba(255,255,255,0.75);
+
+    backdrop-filter:blur(10px);
+
+    border-radius:18px;
+
+    border:1px solid rgba(220,227,234,0.7);
+
+    padding:8px;
+}
+[data-testid="stDataFrame"]{
+
+    background:rgba(255,255,255,0.75);
+
+    backdrop-filter:blur(10px);
+
+    border-radius:18px;
+
+    border:1px solid rgba(220,227,234,0.7);
+
+    overflow:hidden;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ================= HEADER =================
+logo_col, title_col = st.columns([1,8])
+
+with logo_col:
+    st.image(
+        "assets/chicago-pneumatic.jpg",
+        width=140
+    )
+
+with title_col:
+    st.markdown("""
+    <div style="
+    background:rgba(255,255,255,0.85);
+    backdrop-filter:blur(10px);
+    padding:14px 20px;
+    border-radius:16px;
+    border:1px solid #dbe2ea;
+    border-left:5px solid #D71920;
+    box-shadow:0 8px 20px rgba(0,0,0,0.05);
+    ">
+    <h3>Service Engineer Utilization Dashboard</h3>
+    <p>Track performance across locations, states, dealers and engineers</p>
+    </div>
+    """, unsafe_allow_html=True)
+# ================= LOAD =================
+@st.cache_data
+def load_data(file):
+    df = pd.read_excel(file, engine="openpyxl")
+    df.columns = df.columns.str.strip()
+
+    cols = df.columns.tolist()
+
+    try:
+        required_indices = [0,12,13,14,15,16,17,18,19,21,35,36]
+
+        if max(required_indices) >= len(cols):
+            st.error("Excel format incorrect (missing required columns).")
+            st.stop()
+    except:
+        st.error("File format is incorrect or columns missing.")
+        st.stop()
+
+    # Rename safely
+    df = df.rename(columns={
+        cols[0]: "Company",
+        cols[12]: "Start_Date",
+        cols[13]: "Start_Hour",
+        cols[14]: "Start_Min",
+        cols[15]: "End_Date",
+        cols[16]: "End_Hour",
+        cols[17]: "End_Min",
+        cols[18]: "Hours",
+        cols[19]: "Engineer",
+        cols[21]: "State",
+        cols[35]: "Dealer",
+        cols[36]: "Call_Ref"
+    })
+
+    df = df[[
+        "Company","State","Dealer","Engineer",
+        "Call_Ref",
+        "Start_Date","Start_Hour","Start_Min",
+        "End_Date","End_Hour","End_Min"
+    ]]
+
+    # Clean text
+    df["Engineer"] = df["Engineer"].astype(str).str.strip().str.upper()
+    df["Dealer"] = df["Dealer"].astype(str).str.strip()
+    df["Dealer"] = df["Dealer"].replace("nan", np.nan)
+    def safe_mode(x):
+        x = x.dropna()
+        if x.empty:
+            return "UNKNOWN"
+        return x.mode().iloc[0]
+
+    dealer_map = df.groupby("Engineer")["Dealer"].agg(safe_mode)
+    df["Dealer"] = df["Dealer"].fillna(df["Engineer"].map(dealer_map))
+    df["Company"] = df["Company"].astype(str).str.strip()
+    df["State"] = df["State"].astype(str).str.strip()
+
+    # Dates
+    df["Start_Date"] = pd.to_datetime(df["Start_Date"], errors="coerce")
+    df["End_Date"] = pd.to_datetime(df["End_Date"], errors="coerce")
+
+    # Time
+    df["Start_Hour"] = pd.to_numeric(df["Start_Hour"], errors="coerce").fillna(0)
+    df["Start_Min"] = pd.to_numeric(df["Start_Min"], errors="coerce").fillna(0)
+
+    df["End_Hour"] = pd.to_numeric(df["End_Hour"], errors="coerce").fillna(0)
+    df["End_Min"] = pd.to_numeric(df["End_Min"], errors="coerce").fillna(0)
+
+    # Datetime
+    df["Actual_Start"] = df["Start_Date"] + pd.to_timedelta(df["Start_Hour"], unit="h") + pd.to_timedelta(df["Start_Min"], unit="m")
+    df["Actual_End"] = df["End_Date"] + pd.to_timedelta(df["End_Hour"], unit="h") + pd.to_timedelta(df["End_Min"], unit="m")
+
+    # Duration calculation (FIXED)
+    df["Hours"] = (df["Actual_End"] - df["Actual_Start"]).dt.total_seconds() / 3600
+    df["Hours"] = df["Hours"].clip(lower=0).fillna(0)
+
+    # Delayed closure (>48 hrs)
+    df["Delayed Closure"] = df["Hours"] > 48
+
+    # Low duration calls (<1 hrs)
+    df["Below 1hr Calls"] = df["Hours"] < 1
+
+    # Cap hours at 8
+    df["Hours_Capped"] = df["Hours"].clip(upper=8)
+    # Display Time
+    df["Start Time"] = df["Start_Hour"].astype(int).astype(str).str.zfill(2) + ":" + df["Start_Min"].astype(int).astype(str).str.zfill(2)
+    df["End Time"] = df["End_Hour"].astype(int).astype(str).str.zfill(2) + ":" + df["End_Min"].astype(int).astype(str).str.zfill(2)
+
+    # Format duration
+    def format_duration(h):
+        h_int = int(h)
+        m = int(round((h - h_int) * 60))
+        return f"{h_int}h {m}m"
+
+    df["Recorded Duration"] = df["Hours"].apply(format_duration)
+    df["Actual Duration (Adjusted)"] = df["Hours_Capped"].apply(
+    lambda h: f"{int(h)}h {int(round((h%1)*60))}m"
+    )
+    return df
+    
+# ================= FILE =================
+with st.expander("📂 Upload Excel File", expanded=True):
+
+    file = st.file_uploader(
+        "",
+        type=["xlsx"],
+        label_visibility="collapsed"
+    )
+
+if file is None:
+    st.stop()
+
+df = load_data(file)
+
+data_min_date = df["Actual_Start"].min().date()
+data_max_date = df["Actual_Start"].max().date()
+# ================= FILTERS =================
+
+filter_box = st.container(border=True)
+
+with filter_box:
+
+    st.markdown("##### 🔍 Filters")
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        company = st.multiselect(
+            "Company Location",
+            sorted(df["Company"].unique())
+        )
+
+    with c2:
+        state = st.multiselect(
+            "State",
+            sorted(df["State"].unique())
+        )
+
+    with c3:
+        dealer = st.multiselect(
+            "Dealer",
+            sorted(df["Dealer"].unique())
+        )
+
+    c4, c5, c6 = st.columns(3)
+
+    with c4:
+        engineer = st.multiselect(
+            "Engineer",
+            sorted(df["Engineer"].unique())
+        )
+
+    with c5:
+        start_date = st.date_input(
+            "Start Date",
+            value=data_min_date,
+            min_value=data_min_date,
+            max_value=data_max_date
+        )
+
+    with c6:
+        end_date = st.date_input(
+            "End Date",
+            value=data_max_date,
+            min_value=data_min_date,
+            max_value=data_max_date
+        )
+
+# ================= FILTER =================
+filtered = df.copy()
+
+if company:
+    filtered = filtered[filtered["Company"].isin(company)]
+if state:
+    filtered = filtered[filtered["State"].isin(state)]
+if dealer:
+    filtered = filtered[filtered["Dealer"].isin(dealer)]
+if engineer:
+    filtered = filtered[filtered["Engineer"].isin(engineer)]
+
+filtered = filtered[
+    (filtered["Actual_Start"].notna()) &
+    (
+        (filtered["Actual_Start"] >= pd.to_datetime(start_date)) &
+        (filtered["Actual_Start"] <= pd.to_datetime(end_date))
+    )
+]
+def calculate_active_days(start_date, end_date):
+    total_days = 0
+    
+    current = pd.to_datetime(start_date).replace(day=1)
+    end = pd.to_datetime(end_date)
+
+    while current <= end:
+        month_start = current
+        month_end = (current + pd.offsets.MonthEnd(0))
+
+        # overlap with selected range
+        actual_start = max(month_start, pd.to_datetime(start_date))
+        actual_end = min(month_end, end)
+
+        days_in_range = (actual_end - actual_start).days + 1
+
+        # cap at 24 per month
+        total_days += min(days_in_range, 24)
+
+        current = current + pd.DateOffset(months=1)
+
+    return total_days
+# ================= AVAILABILITY =================
+active_days = calculate_active_days(start_date, end_date)
+if active_days == 0:
+    active_days = 1
+available_hours = active_days * 8
+
+# ================= AGG =================
+data = filtered.groupby(
+    ["Dealer", "Engineer"], dropna=False
+)["Hours_Capped"].sum().reset_index()
+
+data = data.rename(columns={"Hours_Capped": "Utilized Hours"})
+
+# Visits
+visits = filtered.groupby(
+    ["Dealer", "Engineer"]
+)["Call_Ref"].nunique().reset_index(name="Visits")
+
+data = data.merge(visits, on=["Dealer", "Engineer"], how="left")
+
+# Clean visits
+data["Visits"] = data["Visits"].fillna(0)
+
+# ---------------- Efficiency ----------------
+data["Hours per Visit"] = data["Utilized Hours"] / data["Visits"]
+data["Hours per Visit"] = data["Hours per Visit"].replace([np.inf, -np.inf], 0).fillna(0).round(2)
+
+# ---------------- Capacity ----------------
+data["Active Days"] = active_days
+data["Available Hours"] = available_hours
+data["Idle Hours"] = (data["Available Hours"] - data["Utilized Hours"]).clip(lower=0)
+data["Time Utilization%"] = (
+    data["Utilized Hours"] / data["Available Hours"] * 100
+).replace([np.inf, -np.inf], 0).fillna(0).round(1)
+
+data["Visits per Day"] = data["Visits"] / data["Active Days"]
+data["Visits per Day"] = data["Visits per Day"].replace([np.inf, -np.inf], 0).fillna(0).round(2)
+
+VISITS_PER_DAY_TARGET = 3
+data["Expected Visits"] = data["Active Days"] * VISITS_PER_DAY_TARGET
+data["Visit %"] = (
+    data["Visits"] / data["Expected Visits"] * 100
+)
+data["Visit %"] = data["Visit %"].replace([np.inf, -np.inf], 0).fillna(0).round(1)
+
+# ================= KPI =================
+st.markdown("""
+<div class="section-header">
+📈 Performance Summary
+</div>
+""", unsafe_allow_html=True)
+
+k1, k2, k3, k4, k5, k6, k7, k8, k9 = st.columns(9)
+
+total_engineers = df["Engineer"].nunique()
+active_engineers = data["Engineer"].nunique()
+total_visits = data["Visits"].sum()
+total_util = data["Utilized Hours"].sum()
+total_avail = active_days * 8 * data["Engineer"].nunique()
+delayed_cases = filtered["Delayed Closure"].sum()
+low_duration_calls = filtered["Below 1hr Calls"].sum()
+
+def card(title, val):
+    st.markdown(f"""
+    <div class="card">
+        <div class="card-title">{title}</div>
+        <div class="card-value">{val}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with k1: card("Total Engineers", total_engineers)
+with k2: card("Active Engineers", active_engineers)
+with k3: card("Available Hours", f"{int(total_avail):,}")
+with k4:
+    st.markdown(f"""
+    <div class="card util-card">
+        <div class="card-title">
+            Utilized Hours
+        </div>
+        <div class="card-value">
+            {round(total_util,1):,}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+with k5:
+    st.markdown(f"""
+    <div class="card util-card">
+        <div class="card-title">
+            Time Utilization
+        </div>
+        <div class="card-value">
+            {(total_util/total_avail)*100:.1f}%
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+with k6: 
+    st.markdown(f"""
+    <div class="card util-card">
+        <div class="card-title">
+            Total Visits
+        </div>
+        <div class="card-value">
+            {int(total_visits):,}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+with k7: card("Active Days", active_days)
+with k8: card("Delayed Closures", int(delayed_cases))
+with k9: card("Below 1hr Calls", int(low_duration_calls))
+st.divider()
+
+st.markdown("""
+<div class="section-header">
+📊 Performance Insights
+</div>
+""", unsafe_allow_html=True)
+
+def style_chart(fig):
+
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+
+        height=320,
+
+        font=dict(
+            family="Inter",
+            color="#111827",
+            size=11
+        ),
+
+        xaxis=dict(
+            tickfont=dict(size=10),
+            title_font=dict(size=11)
+        ),
+
+        yaxis=dict(
+            tickfont=dict(size=10),
+            title_font=dict(size=11)
+        ),
+
+        title_font_size=16,
+
+        margin=dict(
+            l=20,
+            r=20,
+            t=50,
+            b=20
+        ),
+
+        bargap=0.35
+    )
+
+    return fig
+
+
+# ================= CHART DATA =================
+
+top_eng = data.sort_values("Time Utilization%", ascending=False).head(10)
+
+fig_rank = px.bar(
+    top_eng,
+    x="Time Utilization%",
+    y="Engineer",
+    orientation="h",
+    title="Top Utilized Engineers",
+)
+top_visit = data.sort_values(
+    "Visits",
+    ascending=False
+).head(10)
+
+fig_visits = px.bar(
+    top_visit,
+    x="Visits",
+    y="Engineer",
+    orientation="h",
+    title="Most Visits"
+)
+
+fig_visits.update_layout(
+    yaxis={'categoryorder':'total ascending'}
+)
+fig_visits.update_traces(
+    marker_color="#2563EB"
+)
+fig_rank.update_layout(yaxis={'categoryorder':'total ascending'})
+fig_rank.update_traces(
+    marker_color="#D71920"
+)
+dealer_perf = data.groupby("Dealer").agg({
+    "Utilized Hours":"sum",
+    "Available Hours":"sum"
+}).reset_index()
+
+dealer_perf["Util %"] = (
+    dealer_perf["Utilized Hours"] / dealer_perf["Available Hours"] * 100
+).round(1)
+
+fig_dealer = px.bar(
+    dealer_perf.sort_values("Util %", ascending=False),
+    x="Dealer",
+    y="Util %",
+    title="Dealer Utilization"
+)
+fig_dealer.update_layout(
+    xaxis_tickangle=-30
+)
+fig_dealer.update_traces(
+    width=0.45,
+    marker_color="#16A34A"
+)
+# APPLY COMMON CHART STYLE
+
+fig_rank = style_chart(fig_rank)
+
+fig_visits = style_chart(fig_visits)
+
+fig_dealer = style_chart(fig_dealer)
+
+
+# ================= CHART LAYOUT =================
+
+col1, col2 = st.columns(2)
+
+with col1:
+    with st.container(border=True):
+        st.plotly_chart(
+            fig_rank,
+            width="stretch"
+        )
+
+with col2:
+    with st.container(border=True):
+        st.plotly_chart(
+            fig_visits,
+            width="stretch"
+        )
+
+col3 = st.container(border=True)
+
+with col3:
+    st.plotly_chart(
+        fig_dealer,
+        width="stretch"
+    )
+# ================= TABLE =================
+st.markdown("""
+<div class="section-header">
+📋 Engineer Utilization
+</div>
+""", unsafe_allow_html=True)
+
+display_data = data.sort_values(
+    ["Time Utilization%","Utilized Hours"],
+    ascending=[False, False]
+).reset_index(drop=True)
+display_data.insert(0, "No.", display_data.index + 1)
+display_data = display_data[[
+    "No.",
+    "Dealer","Engineer",
+    "Active Days","Available Hours","Utilized Hours","Idle Hours",
+    "Visits","Hours per Visit","Visits per Day",
+    "Time Utilization%"
+]]
+
+display_data["Hours per Visit"] = display_data["Hours per Visit"].round(2)
+
+st.dataframe(display_data, width='stretch', hide_index=True)
+
+# ================= DETAILS =================
+st.markdown("""
+<div class="section-header">
+📝 Detailed Work Log
+</div>
+""", unsafe_allow_html=True)
+
+display_cols = [
+    "Company","State","Dealer","Engineer",
+    "Start_Date","Start Time",
+    "End_Date","End Time",
+    "Recorded Duration",
+    "Actual Duration (Adjusted)",
+    "Delayed Closure",
+    "Below 1hr Calls"
+]
+
+details_df = filtered[display_cols].sort_values("Start_Date").reset_index(drop=True)
+details_df.insert(0, "No.", details_df.index + 1)
+st.dataframe(details_df, width='stretch', hide_index=True)
