@@ -746,21 +746,68 @@ with sidebar:
         placeholder="All Locations"
     )
 
+    state_source = df.copy()
+
+    if company:
+        state_source = state_source[
+            state_source["Company"].isin(company)
+        ]
+
     state = st.multiselect(
         "State",
-        sorted(df["State"].unique()),
+        sorted(
+            state_source["State"]
+            .dropna()
+            .unique()
+        ),
         placeholder="All States"
     )
 
+    dealer_source = df.copy()
+
+    if company:
+        dealer_source = dealer_source[
+            dealer_source["Company"].isin(company)
+        ]
+
+    if state:
+        dealer_source = dealer_source[
+            dealer_source["State"].isin(state)
+        ]
+
     dealer = st.multiselect(
         "Dealer",
-        sorted(df["Dealer"].unique()),
+        sorted(
+            dealer_source["Dealer"]
+            .dropna()
+            .unique()
+        ),
         placeholder="All Dealers"
     )
+    engineer_source = df.copy()
+
+    if company:
+        engineer_source = engineer_source[
+            engineer_source["Company"].isin(company)
+        ]
+
+    if state:
+        engineer_source = engineer_source[
+            engineer_source["State"].isin(state)
+        ]
+
+    if dealer:
+        engineer_source = engineer_source[
+            engineer_source["Dealer"].isin(dealer)
+        ]
 
     engineer = st.multiselect(
         "Engineer",
-        sorted(df["Engineer"].unique()),
+        sorted(
+            engineer_source["Engineer"]
+            .dropna()
+            .unique()
+        ),
         placeholder="All Engineers"
     )
 
