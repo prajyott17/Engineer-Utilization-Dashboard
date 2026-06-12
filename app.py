@@ -1092,11 +1092,14 @@ with main:
         
     with k3:
         card("📅","Active Days", active_days)
-    
+        
     with k4:
-        card("⏱️","Utilized Hours", f"{round(total_util,1):,}")
+        card("🕒","Available Hours", f"{int(total_avail):,}")
 
     with k5:
+        card("⏱️","Utilized Hours", f"{round(total_util,1):,}")
+
+    with k6:
         card(
             "📈",
             "Time Utilization",
@@ -1104,24 +1107,22 @@ with main:
             "kpi-orange"
         )
 
-    with k6:
+    with k7:
         card(
             "🎯",
             "Expected Visits",
             f"{int(total_expected_visits):,}"
         )
-    with k7:
+    with k8:
         card("👁️","Actual Visits", f"{int(total_actual_visits):,}")
 
-    with k8:
+    with k9:
         card(
             "📊",
             "Visit %",
             f"{visit_pct:.1f}%",
             "kpi-green"
         )
-    with k9:
-        card("🕒","Available Hours", f"{int(total_avail):,}")
 
     with k10:
         card("⏳","Delayed Closures", int(delayed_cases))
