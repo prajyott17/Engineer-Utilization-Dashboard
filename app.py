@@ -1089,10 +1089,10 @@ with main:
 
     with k2:
         card("🧑‍🔧","Active Engineers", active_engineers)
-
+        
     with k3:
-        card("🕒","Available Hours", f"{int(total_avail):,}")
-
+        card("📅","Active Days", active_days)
+    
     with k4:
         card("⏱️","Utilized Hours", f"{round(total_util,1):,}")
 
@@ -1121,7 +1121,7 @@ with main:
             "kpi-green"
         )
     with k9:
-        card("📅","Active Days", active_days)
+        card("🕒","Available Hours", f"{int(total_avail):,}")
 
     with k10:
         card("⏳","Delayed Closures", int(delayed_cases))
